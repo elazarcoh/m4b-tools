@@ -316,18 +316,26 @@ def generate_csv_from_folder(folder_path: str, output_csv: str = None) -> bool:
                 # Make path relative to CSV file directory
                 rel_path = os.path.relpath(file_path, os.path.dirname(output_csv))
                 
-                # Generate chapter title from filename
-                filename = Path(file_path).stem
-                # Clean up filename for chapter title
-                cleaned = re.sub(r'^(chapter|ch|part|pt)[\s\-_]*\d*[\s\-_]*', '', filename, flags=re.IGNORECASE)
-                cleaned = re.sub(r'^\d+[\s\-_]*', '', cleaned)  # Remove leading numbers
-                cleaned = cleaned.replace('_', ' ').replace('-', ' ')
-                cleaned = ' '.join(cleaned.split())  # Normalize whitespace
+                # First try to get title from file metadata
+                metadata = get_audio_metadata(file_path)
+                metadata_title = metadata.get('title', '').strip() if metadata else ''
                 
-                if cleaned:
-                    chapter_title = cleaned.title()
+                if metadata_title:
+                    # Use metadata title if available
+                    chapter_title = metadata_title
                 else:
-                    chapter_title = filename
+                    # Fall back to generating chapter title from filename
+                    filename = Path(file_path).stem
+                    # Clean up filename for chapter title
+                    cleaned = re.sub(r'^(chapter|ch|part|pt)[\s\-_]*\d*[\s\-_]*', '', filename, flags=re.IGNORECASE)
+                    cleaned = re.sub(r'^\d+[\s\-_]*', '', cleaned)  # Remove leading numbers
+                    cleaned = cleaned.replace('_', ' ').replace('-', ' ')
+                    cleaned = ' '.join(cleaned.split())  # Normalize whitespace
+                    
+                    if cleaned:
+                        chapter_title = cleaned.title()
+                    else:
+                        chapter_title = filename
                 
                 writer.writerow([rel_path, chapter_title])
         
