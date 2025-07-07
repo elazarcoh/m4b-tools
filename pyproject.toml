@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "m4b-tools"
+version = "1.0.0"
+description = "Tools for converting audio files to M4B format and combining M4B files with chapters"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "M4B Tools Contributors"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Conversion",
+]
+requires-python = ">=3.7"
+dependencies = []
+
+[project.optional-dependencies]
+progress = ["tqdm"]
+test = ["pytest>=6.0", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/elazarcoh/m4b-tools"
+Repository = "https://github.com/elazarcoh/m4b-tools"
+Issues = "https://github.com/elazarcoh/m4b-tools/issues"
+
+[project.scripts]
+m4b-tools = "m4b_tools.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/m4b_tools"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/m4b_tools",
+    "tests",
+    "README.md",
+    "pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--verbose"
+
+[tool.coverage.run]
+source = ["src/m4b_tools"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+]
