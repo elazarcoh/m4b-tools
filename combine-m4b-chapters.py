@@ -116,8 +116,9 @@ def create_concat_file(files: List[str], temp_dir: str) -> str:
     concat_path = os.path.join(temp_dir, 'concat_list.txt')
     with open(concat_path, 'w', encoding='utf-8') as f:
         for file_path in files:
-            # Escape special characters for FFmpeg
-            escaped_path = file_path.replace("'", "'\"'\"'")
+            # Escape special characters for FFmpeg concat format
+            # Replace single quotes with escaped single quotes and wrap in single quotes
+            escaped_path = file_path.replace("'", "'\\''")
             f.write(f"file '{escaped_path}'\n")
     return concat_path
 
