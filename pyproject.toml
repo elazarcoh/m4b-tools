@@ -27,7 +27,9 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio :: Conversion",
 ]
 requires-python = ">=3.7"
-dependencies = []
+dependencies = [
+    "typing_extensions>=3.7.4; python_version<'3.8'"
+]
 
 [project.optional-dependencies]
 progress = ["tqdm"]

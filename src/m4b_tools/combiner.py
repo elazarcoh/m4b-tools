@@ -17,19 +17,64 @@ import urllib.parse
 import time
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
+from collections import Counter
 import logging
 from contextlib import nullcontext
+import sys
+
+if sys.version_info >= (3, 8):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 from .utils import (
     check_ffmpeg, format_time, natural_sort_key, 
-    get_audio_metadata, ensure_output_directory
+    get_audio_metadata, ensure_output_directory, AudioMetadata
 )
+
+# TypedDict definitions
+class Chapter(TypedDict):
+    """Type definition for chapter data."""
+    title: str
+    start: float
+    end: float
+
+
+class ChapterWithDuration(Chapter):
+    """Type definition for chapter data with duration."""
+    duration: float
+
+
+class ProcessedAudioMetadata(AudioMetadata):
+    """Type definition for processed audio metadata with required fields."""
+    duration: float  # Required
+    file_path: str  # Required
+    start_offset: float  # Required
+
+
+class BookMetadata(TypedDict, total=False):
+    """Type definition for book metadata."""
+    title: str
+    artist: str
+    album: str
+    author: str
+    narrator: str
+    genre: str
+    year: str
+    description: str
+
+
+class FileEntry(TypedDict):
+    """Type definition for file entry in CSV."""
+    file: str
+    title: str
+
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-def extract_existing_chapters(file_path: str) -> List[Dict]:
+def extract_existing_chapters(file_path: str) -> List[ChapterWithDuration]:
     """Extract existing chapter information from an M4B file."""
     try:
         cmd = [
@@ -70,7 +115,7 @@ def create_concat_file(files: List[str], temp_dir: str) -> str:
     return concat_path
 
 
-def create_chapter_metadata(chapters: List[Dict], temp_dir: str, metadata: Dict) -> str:
+def create_chapter_metadata(chapters: List[Chapter], temp_dir: str, metadata: BookMetadata) -> str:
     """Create FFmpeg metadata file with chapter information."""
     metadata_path = os.path.join(temp_dir, 'metadata.txt')
     
@@ -78,22 +123,30 @@ def create_chapter_metadata(chapters: List[Dict], temp_dir: str, metadata: Dict)
         f.write(";FFMETADATA1\n")
         
         # Add book metadata
-        if metadata.get('title'):
-            f.write(f"title={metadata['title']}\n")
-        if metadata.get('artist'):
-            f.write(f"artist={metadata['artist']}\n")
-        if metadata.get('album'):
-            f.write(f"album={metadata['album']}\n")
-        if metadata.get('author'):
-            f.write(f"album_artist={metadata['author']}\n")
-        if metadata.get('narrator'):
-            f.write(f"composer={metadata['narrator']}\n")
-        if metadata.get('genre'):
-            f.write(f"genre={metadata['genre']}\n")
-        if metadata.get('year'):
-            f.write(f"date={metadata['year']}\n")
-        if metadata.get('description'):
-            f.write(f"comment={metadata['description']}\n")
+        title = metadata.get('title')
+        if title:
+            f.write(f"title={title}\n")
+        artist = metadata.get('artist')
+        if artist:
+            f.write(f"artist={artist}\n")
+        album = metadata.get('album')
+        if album:
+            f.write(f"album={album}\n")
+        author = metadata.get('author')
+        if author:
+            f.write(f"album_artist={author}\n")
+        narrator = metadata.get('narrator')
+        if narrator:
+            f.write(f"composer={narrator}\n")
+        genre = metadata.get('genre')
+        if genre:
+            f.write(f"genre={genre}\n")
+        year = metadata.get('year')
+        if year:
+            f.write(f"date={year}\n")
+        description = metadata.get('description')
+        if description:
+            f.write(f"comment={description}\n")
         
         f.write("\n")
         
@@ -109,7 +162,7 @@ def create_chapter_metadata(chapters: List[Dict], temp_dir: str, metadata: Dict)
     return metadata_path
 
 
-def check_audio_compatibility(files_metadata: List[Dict]) -> bool:
+def check_audio_compatibility(files_metadata: List[ProcessedAudioMetadata]) -> bool:
     """Check if all files have compatible audio parameters."""
     if not files_metadata:
         return False
@@ -207,7 +260,7 @@ def derive_chapter_title(file_path: str, index: int, existing_title: str = "") -
         return f"Chapter {index}"
 
 
-def generate_csv_from_folder(folder_path: str, output_csv: str = None) -> bool:
+def generate_csv_from_folder(folder_path: str, output_csv: Optional[str] = None) -> bool:
     """
     Generate a CSV template file from a folder containing M4B files.
     
@@ -254,15 +307,42 @@ def generate_csv_from_folder(folder_path: str, output_csv: str = None) -> bool:
     
     logger.info(f"Generating CSV template for {len(m4b_files)} M4B files...")
     
+    # Extract metadata from all files to populate template
+    logger.info("Analyzing metadata from files...")
+    all_metadata = []
+    for file_path in m4b_files:
+        metadata = get_audio_metadata(file_path)
+        if metadata:
+            all_metadata.append(metadata)
+    
+    # Aggregate metadata for template (use most common values or first non-empty)
+    def get_most_common_or_first(field):
+        values = [meta.get(field, '').strip() for meta in all_metadata if meta.get(field, '').strip()]
+        if not values:
+            return ''
+        # Return the most common value, or first if all are unique
+        counter = Counter(values)
+        return counter.most_common(1)[0][0] if counter else ''
+    
+    # Generate template metadata from files
+    template_title = get_most_common_or_first('album') or get_most_common_or_first('title') or folder_name
+    template_author = get_most_common_or_first('author') or get_most_common_or_first('artist')
+    template_narrator = get_most_common_or_first('narrator')
+    template_genre = get_most_common_or_first('genre') or 'Audiobook'
+    template_year = get_most_common_or_first('year')
+    template_description = get_most_common_or_first('description')
+    
+    logger.info(f"Detected metadata - Title: '{template_title}', Author: '{template_author}', Narrator: '{template_narrator}', Year: '{template_year}'")
+    
     try:
         with open(output_csv, 'w', encoding='utf-8', newline='') as f:
-            # Write metadata headers
-            f.write(f"#title,{folder_name}\n")
-            f.write("#author,\n")
-            f.write("#narrator,\n")
-            f.write("#genre,Audiobook\n")
-            f.write("#year,\n")
-            f.write("#description,\n")
+            # Write metadata headers with extracted values
+            f.write(f"#title,{template_title}\n")
+            f.write(f"#author,{template_author}\n")
+            f.write(f"#narrator,{template_narrator}\n")
+            f.write(f"#genre,{template_genre}\n")
+            f.write(f"#year,{template_year}\n")
+            f.write(f"#description,{template_description}\n")
             f.write(f"#output_path,{output_m4b}\n")
             f.write("#cover_path,\n")
             f.write("\n")
@@ -300,7 +380,10 @@ def generate_csv_from_folder(folder_path: str, output_csv: str = None) -> bool:
                 writer.writerow([rel_path, chapter_title])
         
         logger.info(f"✅ CSV template generated: {output_csv}")
-        logger.info(f"   Title: {folder_name}")
+        logger.info(f"   Title: {template_title}")
+        logger.info(f"   Author: {template_author}")
+        logger.info(f"   Narrator: {template_narrator}")
+        logger.info(f"   Year: {template_year}")
         logger.info(f"   Output: {output_m4b}")
         logger.info(f"   Files: {len(m4b_files)}")
         
@@ -311,7 +394,7 @@ def generate_csv_from_folder(folder_path: str, output_csv: str = None) -> bool:
         return False
 
 
-def parse_csv_input(csv_file: str) -> Tuple[List[Dict], Dict]:
+def parse_csv_input(csv_file: str) -> Tuple[List[FileEntry], Dict[str, str]]:
     """
     Parse CSV file with optional metadata headers and file/title columns.
     
@@ -397,10 +480,11 @@ def parse_csv_input(csv_file: str) -> Tuple[List[Dict], Dict]:
         
         title = row.get('title', '').strip()
         
-        file_list.append({
+        file_entry: FileEntry = {
             'file': file_path,
             'title': title
-        })
+        }
+        file_list.append(file_entry)
     
     if not file_list:
         raise ValueError("No valid M4B files found in CSV")
@@ -410,7 +494,7 @@ def parse_csv_input(csv_file: str) -> Tuple[List[Dict], Dict]:
     return file_list, metadata
 
 
-def combine_m4b_files(input_pattern: str = None, output_file: str = None, title: Optional[str] = None,
+def combine_m4b_files(input_pattern: Optional[str] = None, output_file: Optional[str] = None, title: Optional[str] = None,
                      preserve_existing_chapters: bool = False, temp_dir: Optional[str] = None,
                      csv_file: Optional[str] = None) -> bool:
     """
@@ -431,11 +515,12 @@ def combine_m4b_files(input_pattern: str = None, output_file: str = None, title:
         logger.error("FFmpeg is required but not available")
         return False
     
-    csv_metadata = {}
+    csv_metadata: Dict[str, str] = {}
     
     if csv_file:
         # Load files from CSV
         try:
+            file_title_list: List[FileEntry]
             file_title_list, csv_metadata = parse_csv_input(csv_file)
             m4b_files = [item['file'] for item in file_title_list]
             
@@ -458,7 +543,7 @@ def combine_m4b_files(input_pattern: str = None, output_file: str = None, title:
         m4b_files = [os.path.abspath(f) for f in matching_files if Path(f).suffix.lower() in {'.m4b', '.m4a'}]
         
         # Create file_title_list for consistency
-        file_title_list = [{'file': f, 'title': ''} for f in m4b_files]
+        file_title_list: List[FileEntry] = [{'file': f, 'title': ''} for f in m4b_files]
     
     if not m4b_files:
         source = "CSV file" if csv_file else f"pattern: {input_pattern}"
@@ -480,7 +565,7 @@ def combine_m4b_files(input_pattern: str = None, output_file: str = None, title:
     
     # Extract metadata from all files
     logger.info("Extracting metadata from files...")
-    files_metadata = []
+    files_metadata: List[ProcessedAudioMetadata] = []
     total_duration = 0.0
     
     for file_path in m4b_files:
@@ -489,12 +574,18 @@ def combine_m4b_files(input_pattern: str = None, output_file: str = None, title:
             logger.error(f"Could not extract metadata from {file_path}")
             return False
         
-        metadata['file_path'] = file_path
-        metadata['start_offset'] = total_duration
-        files_metadata.append(metadata)
-        total_duration += metadata['duration']
+        # Create ProcessedAudioMetadata with required fields
+        duration = metadata.get('duration', 0.0)
+        processed_metadata: ProcessedAudioMetadata = {
+            **metadata,  # type: ignore
+            'file_path': file_path,
+            'start_offset': total_duration,
+            'duration': duration
+        }
+        files_metadata.append(processed_metadata)
+        total_duration += duration
         
-        logger.info(f"  {os.path.basename(file_path)}: {format_time(metadata['duration'])}")
+        logger.info(f"  {os.path.basename(file_path)}: {format_time(duration)}")
     
     # Check audio compatibility
     compatible = check_audio_compatibility(files_metadata)
@@ -572,7 +663,7 @@ def combine_m4b_files(input_pattern: str = None, output_file: str = None, title:
         concat_file = create_concat_file(m4b_files, use_temp_dir)
         
         # Determine output metadata
-        output_metadata = {
+        output_metadata: BookMetadata = {
             'title': title or csv_metadata.get('title') or files_metadata[0].get('album', '') or 'Combined Audiobook',
             'artist': csv_metadata.get('author') or files_metadata[0].get('artist', ''),
             'album': title or csv_metadata.get('title') or files_metadata[0].get('album', '') or 'Combined Audiobook',
@@ -631,7 +722,7 @@ def combine_m4b_files(input_pattern: str = None, output_file: str = None, title:
         ]
         
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
             logger.info("Audio files combined successfully")
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to combine audio files: {e.stderr}")
@@ -661,7 +752,7 @@ def combine_m4b_files(input_pattern: str = None, output_file: str = None, title:
         ])
         
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
             logger.info("Metadata and chapters added successfully")
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to add metadata: {e.stderr}")

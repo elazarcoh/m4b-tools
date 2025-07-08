@@ -9,7 +9,34 @@ import subprocess
 import json
 import re
 import logging
-from typing import List, Dict, Optional
+import sys
+from typing import List, Optional
+
+if sys.version_info >= (3, 8):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
+
+# TypedDict definitions
+class AudioMetadata(TypedDict, total=False):
+    """Type definition for audio metadata."""
+    duration: float
+    title: str
+    artist: str
+    album: str
+    album_artist: str
+    author: str
+    composer: str
+    narrator: str
+    genre: str
+    date: str
+    year: str
+    comment: str
+    description: str
+    codec: str
+    bitrate: str
+    sample_rate: str
+    channels: int
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -46,7 +73,7 @@ def natural_sort_key(filename: str) -> List:
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', filename)]
 
 
-def get_audio_metadata(file_path: str) -> Dict:
+def get_audio_metadata(file_path: str) -> AudioMetadata:
     """Get audio file metadata including duration and format info."""
     try:
         cmd = [
@@ -60,16 +87,27 @@ def get_audio_metadata(file_path: str) -> Dict:
         format_info = metadata.get('format', {})
         audio_stream = next((s for s in metadata.get('streams', []) if s.get('codec_type') == 'audio'), {})
         
-        return {
+        tags = format_info.get('tags', {})
+        metadata: AudioMetadata = {
             'duration': float(format_info.get('duration', 0)),
-            'title': format_info.get('tags', {}).get('title', ''),
-            'artist': format_info.get('tags', {}).get('artist', ''),
-            'album': format_info.get('tags', {}).get('album', ''),
+            'title': tags.get('title', ''),
+            'artist': tags.get('artist', ''),
+            'album': tags.get('album', ''),
+            'album_artist': tags.get('album_artist', ''),
+            'author': tags.get('author', '') or tags.get('album_artist', ''),
+            'composer': tags.get('composer', ''),
+            'narrator': tags.get('narrator', '') or tags.get('composer', ''),
+            'genre': tags.get('genre', ''),
+            'date': tags.get('date', ''),
+            'year': tags.get('year', '') or tags.get('date', '')[:4] if tags.get('date') else '',
+            'comment': tags.get('comment', ''),
+            'description': tags.get('description', '') or tags.get('comment', ''),
             'codec': audio_stream.get('codec_name', ''),
             'bitrate': audio_stream.get('bit_rate', ''),
             'sample_rate': audio_stream.get('sample_rate', ''),
             'channels': audio_stream.get('channels', 2)
         }
+        return metadata
     except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError) as e:
         logger.warning(f"Could not get metadata for {file_path}: {e}")
         return {}
