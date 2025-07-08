@@ -263,6 +263,78 @@ def derive_chapter_title(file_path: str, index: int, existing_title: str = "") -
 def generate_csv_from_folder(folder_path: str, output_csv: Optional[str] = None) -> bool:
     """
     Generate a CSV template file from a folder containing M4B files.
+    Supports glob patterns to process multiple folders at once.
+    
+    Args:
+        folder_path: Path to folder containing M4B files or glob pattern for multiple folders
+        output_csv: Output CSV file path (defaults to folder_name.csv for single folder,
+                   or automatically generated names for multiple folders)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    # Check if the folder_path contains glob patterns
+    if any(char in folder_path for char in ['*', '?', '[', ']']):
+        return generate_csv_from_multiple_folders(folder_path, output_csv)
+    else:
+        return generate_csv_from_single_folder(folder_path, output_csv)
+
+
+def generate_csv_from_multiple_folders(folder_pattern: str, base_output_csv: Optional[str] = None) -> bool:
+    """
+    Generate CSV template files from multiple folders matching a glob pattern.
+    
+    Args:
+        folder_pattern: Glob pattern to match multiple folders
+        base_output_csv: Base output CSV file path (will be ignored, each folder gets its own CSV)
+        
+    Returns:
+        True if at least one CSV was generated successfully, False otherwise
+    """
+    # Find all directories matching the pattern
+    matching_folders = []
+    
+    # Handle different types of glob patterns
+    if os.path.isabs(folder_pattern):
+        # Absolute path pattern
+        potential_matches = glob.glob(folder_pattern, recursive=True)
+    else:
+        # Relative path pattern
+        potential_matches = glob.glob(folder_pattern, recursive=True)
+    
+    # Filter to only include directories
+    for match in potential_matches:
+        if os.path.isdir(match):
+            matching_folders.append(os.path.abspath(match))
+    
+    if not matching_folders:
+        logger.error(f"No directories found matching pattern: {folder_pattern}")
+        return False
+    
+    logger.info(f"Found {len(matching_folders)} directories matching pattern: {folder_pattern}")
+    
+    successful_csvs = 0
+    total_folders = len(matching_folders)
+    
+    for folder_path in sorted(matching_folders):
+        folder_name = os.path.basename(folder_path)
+        logger.info(f"Processing folder: {folder_name}")
+        
+        # Generate CSV for this folder (output_csv=None means auto-generate name)
+        success = generate_csv_from_single_folder(folder_path, None)
+        if success:
+            successful_csvs += 1
+        else:
+            logger.warning(f"Failed to generate CSV for folder: {folder_name}")
+    
+    logger.info(f"Successfully generated {successful_csvs}/{total_folders} CSV files")
+    
+    return successful_csvs > 0
+
+
+def generate_csv_from_single_folder(folder_path: str, output_csv: Optional[str] = None) -> bool:
+    """
+    Generate a CSV template file from a single folder containing M4B files.
     
     Args:
         folder_path: Path to folder containing M4B files

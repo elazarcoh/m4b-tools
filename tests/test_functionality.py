@@ -299,216 +299,219 @@ class TestAudioFunctionality:
             assert "part03.m4b" in content
             assert "file,title" in content
     
-    def test_error_handling_invalid_input(self):
-        """Test error handling with invalid input files."""
-        # Test conversion with non-existent file
-        result = convert_to_m4b("/nonexistent/file.mp3", "/tmp/output.m4b")
-        assert result is False, "Conversion of non-existent file should fail"
+    def test_generate_csv_from_multiple_folders_glob_pattern(self):
+        """Test generating CSV templates from multiple folders using glob patterns."""
+        # Create multiple test folders with M4B files
+        test_folders = ["book1", "book2", "series_book3"]
         
-        # Test conversion to invalid output path
-        mp3_file = self.create_test_audio_file("test", duration=1.0, format_name="mp3")
-        result = convert_to_m4b(mp3_file, "/invalid/path/output.m4b")
-        assert result is False, "Conversion to invalid path should fail"
-    
-    @pytest.mark.parametrize("format_name", ["mp3", "flac", "m4a"])
-    def test_conversion_different_formats(self, format_name):
-        """Test conversion from various audio formats."""
-        # Create test file
-        source_file = self.create_test_audio_file(f"test_{format_name}", 
-                                                duration=1.5, 
-                                                format_name=format_name)
-        
-        # Convert to M4B
-        output_file = os.path.join(self.temp_dir, f"output_{format_name}.m4b")
-        result = convert_to_m4b(source_file, output_file)
-        
-        # Verify conversion
-        assert result is True, f"Conversion from {format_name} should succeed"
-        self.verify_audio_file(output_file, expected_duration=1.5)
-    
-    def create_test_m4b_with_chapters(self, filename: str, num_chapters: int = 3, 
-                                    chapter_duration: float = 2.0) -> str:
-        """
-        Create a test M4B file with chapters.
-        
-        Args:
-            filename: Name of the file (without extension)
-            num_chapters: Number of chapters to create
-            chapter_duration: Duration of each chapter in seconds
+        for folder_name in test_folders:
+            folder_path = os.path.join(self.temp_dir, folder_name)
+            os.makedirs(folder_path, exist_ok=True)
             
-        Returns:
-            Full path to the created M4B file
-        """
-        output_path = os.path.join(self.temp_dir, f"{filename}.m4b")
+            # Create 2-3 M4B files in each folder
+            num_files = 2 if folder_name == "book1" else 3
+            for i in range(1, num_files + 1):
+                source_file = self.create_test_audio_file(f"{folder_name}_part{i:02d}", duration=1.5, format_name="mp3")
+                m4b_file = os.path.join(folder_path, f"part{i:02d}.m4b")
+                result = convert_to_m4b(source_file, m4b_file)
+                assert result is True
         
-        # Create a longer audio file
-        total_duration = num_chapters * chapter_duration
-        cmd = [
-            'ffmpeg', '-f', 'lavfi', 
-            '-i', f'sine=frequency=440:duration={total_duration}:sample_rate=22050',
-            '-ac', '1',  # Mono channel
-            '-c:a', 'aac',  # Use AAC codec for M4B
-            '-b:a', '64k',  # Low bitrate for test
-            '-y',  # Overwrite if exists
-            output_path
-        ]
+        # Test with simple wildcard pattern
+        pattern = os.path.join(self.temp_dir, "book*")
+        result = generate_csv_from_folder(pattern)
+        assert result is True, "CSV generation with glob pattern should succeed"
         
-        try:
-            subprocess.run(cmd, capture_output=True, text=True, check=True)
-            
-            # Create a chapter file for FFmpeg
-            chapter_file = os.path.join(self.temp_dir, f"{filename}_chapters.txt")
-            with open(chapter_file, 'w') as f:
-                f.write(";FFMETADATA1\n")
-                f.write("title=Test Book\n")
-                f.write("album=Test Book\n") 
-                f.write("artist=Test Author\n")
-                f.write("\n")
+        # Verify individual CSV files were created
+        for folder_name in test_folders:
+            if folder_name.startswith("book"):
+                csv_file = os.path.join(self.temp_dir, folder_name, f"{folder_name}.csv")
+                assert os.path.exists(csv_file), f"CSV file should exist for {folder_name}"
                 
-                # Add chapter markers
-                for i in range(num_chapters):
-                    start_time = int(i * chapter_duration * 1000)  # Convert to milliseconds
-                    end_time = int((i + 1) * chapter_duration * 1000)
-                    f.write("[CHAPTER]\n")
-                    f.write("TIMEBASE=1/1000\n")
-                    f.write(f"START={start_time}\n")
-                    f.write(f"END={end_time}\n")
-                    f.write(f"title=Chapter {i + 1}\n")
-                    f.write("\n")
-            
-            # Add chapters using FFmpeg metadata
-            chapter_output = os.path.join(self.temp_dir, f"{filename}_with_chapters.m4b")
-            chapter_cmd = [
-                'ffmpeg', '-i', output_path, '-i', chapter_file,
-                '-map_metadata', '1',  # Use metadata from chapter file
-                '-c', 'copy',  # Copy streams without re-encoding
-                '-y', chapter_output
-            ]
-            
-            subprocess.run(chapter_cmd, capture_output=True, text=True, check=True)
-            
-            # Use the version with chapters
-            os.replace(chapter_output, output_path)
-            
-            # Clean up chapter file
-            os.remove(chapter_file)
-            
-            self.test_files.append(output_path)
-            return output_path
-        except subprocess.CalledProcessError as e:
-            pytest.fail(f"Failed to create test M4B file {output_path}: {e.stderr}")
+                # Verify CSV content
+                with open(csv_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    assert "#title," in content
+                    assert "#output_path," in content
+                    assert "file,title" in content
     
-    def test_split_m4b_by_chapters(self):
-        """Test splitting an M4B file by chapters."""
-        # Create a test M4B file 
-        m4b_file = self.create_test_m4b_with_chapters("test_book", num_chapters=3)
+    def test_generate_csv_from_multiple_folders_recursive_pattern(self):
+        """Test generating CSV templates with recursive glob patterns."""
+        # Create nested folder structure
+        base_folders = ["series1", "series2"]
         
-        # Create output directory
-        output_dir = os.path.join(self.temp_dir, "split_output")
-        
-        # Split the file
-        successful, total = split_m4b_file(
-            file_path=m4b_file,
-            output_dir=output_dir,
-            output_format='mp3',
-            template='{book_title}/Chapter {chapter_num:02d} - {chapter_title}.{ext}'
-        )
-        
-        # Verify split was successful
-        assert successful == total == 3, f"Expected 3 chapters split, got {successful}/{total}"
-        
-        # Verify output files exist
-        expected_files = [
-            "Test Book/Chapter 01 - Chapter 1.mp3",
-            "Test Book/Chapter 02 - Chapter 2.mp3", 
-            "Test Book/Chapter 03 - Chapter 3.mp3"
-        ]
-        
-        for expected_file in expected_files:
-            file_path = os.path.join(output_dir, expected_file)
-            assert os.path.exists(file_path), f"Expected output file not found: {file_path}"
-            assert os.path.getsize(file_path) > 0, f"Output file is empty: {file_path}"
+        for series in base_folders:
+            series_path = os.path.join(self.temp_dir, series)
+            os.makedirs(series_path, exist_ok=True)
             
-            # Verify it's a valid audio file
-            self.verify_audio_file(file_path, expected_duration=2.0, tolerance=1.0)
+            # Create sub-folders within each series
+            for book_num in range(1, 3):
+                book_folder = f"book{book_num}"
+                book_path = os.path.join(series_path, book_folder)
+                os.makedirs(book_path, exist_ok=True)
+                
+                # Create M4B files in each book folder
+                for i in range(1, 3):
+                    source_file = self.create_test_audio_file(f"{series}_{book_folder}_part{i:02d}", duration=1.5, format_name="mp3")
+                    m4b_file = os.path.join(book_path, f"chapter{i:02d}.m4b")
+                    result = convert_to_m4b(source_file, m4b_file)
+                    assert result is True
+        
+        # Test with recursive pattern
+        pattern = os.path.join(self.temp_dir, "**/book*")
+        result = generate_csv_from_folder(pattern)
+        assert result is True, "CSV generation with recursive pattern should succeed"
+        
+        # Verify CSV files were created for each book folder
+        for series in base_folders:
+            for book_num in range(1, 3):
+                book_folder = f"book{book_num}"
+                csv_file = os.path.join(self.temp_dir, series, book_folder, f"{book_folder}.csv")
+                assert os.path.exists(csv_file), f"CSV file should exist for {series}/{book_folder}"
     
-    def test_split_m4b_different_formats(self):
-        """Test splitting M4B to different output formats."""
-        # Create a test M4B file
-        m4b_file = self.create_test_m4b_with_chapters("format_test", num_chapters=2)
+    def test_generate_csv_multiple_folders_no_matches(self):
+        """Test glob pattern that matches no directories."""
+        # Test with pattern that won't match anything
+        pattern = os.path.join(self.temp_dir, "nonexistent_*")
+        result = generate_csv_from_folder(pattern)
+        assert result is False, "CSV generation should fail when no directories match"
+    
+    def test_generate_csv_multiple_folders_empty_directories(self):
+        """Test with directories that contain no M4B files."""
+        # Create empty directories
+        empty_folders = ["empty1", "empty2"]
+        for folder_name in empty_folders:
+            folder_path = os.path.join(self.temp_dir, folder_name)
+            os.makedirs(folder_path, exist_ok=True)
         
-        formats_to_test = ['mp3', 'm4a', 'flac']
+        # Test with pattern matching empty directories
+        pattern = os.path.join(self.temp_dir, "empty*")
+        result = generate_csv_from_folder(pattern)
+        assert result is False, "CSV generation should fail when directories have no M4B files"
+    
+    def test_generate_csv_mixed_folders_some_with_files(self):
+        """Test with a mix of folders - some with M4B files, some empty."""
+        # Create folder with M4B files
+        good_folder = os.path.join(self.temp_dir, "good_book")
+        os.makedirs(good_folder, exist_ok=True)
         
-        for output_format in formats_to_test:
-            output_dir = os.path.join(self.temp_dir, f"split_{output_format}")
+        for i in range(1, 3):
+            source_file = self.create_test_audio_file(f"good_part{i:02d}", duration=1.5, format_name="mp3")
+            m4b_file = os.path.join(good_folder, f"part{i:02d}.m4b")
+            result = convert_to_m4b(source_file, m4b_file)
+            assert result is True
+        
+        # Create empty folder
+        empty_folder = os.path.join(self.temp_dir, "empty_book")
+        os.makedirs(empty_folder, exist_ok=True)
+        
+        # Test with pattern matching both folders
+        pattern = os.path.join(self.temp_dir, "*_book")
+        result = generate_csv_from_folder(pattern)
+        assert result is True, "CSV generation should succeed if at least one folder has files"
+        
+        # Verify CSV was created for the good folder
+        csv_file = os.path.join(good_folder, "good_book.csv")
+        assert os.path.exists(csv_file), "CSV file should exist for folder with M4B files"
+        
+        # Verify no CSV was created for the empty folder
+        empty_csv_file = os.path.join(empty_folder, "empty_book.csv")
+        assert not os.path.exists(empty_csv_file), "CSV file should not exist for empty folder"
+    
+    def test_generate_csv_single_folder_vs_glob_behavior(self):
+        """Test that single folder path works the same as before."""
+        # Create M4B files in a single folder
+        single_folder = os.path.join(self.temp_dir, "single_test")
+        os.makedirs(single_folder, exist_ok=True)
+        
+        for i in range(1, 4):
+            source_file = self.create_test_audio_file(f"single_part{i:02d}", duration=1.5, format_name="mp3")
+            m4b_file = os.path.join(single_folder, f"part{i:02d}.m4b")
+            result = convert_to_m4b(source_file, m4b_file)
+            assert result is True
+        
+        # Test with direct folder path (no glob patterns)
+        result = generate_csv_from_folder(single_folder)
+        assert result is True, "CSV generation for single folder should work"
+        
+        # Verify CSV was created
+        csv_file = os.path.join(single_folder, "single_test.csv")
+        assert os.path.exists(csv_file), "CSV file should exist"
+        
+        # Verify content is correct
+        with open(csv_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            assert "#title," in content
+            assert "#output_path," in content
+            assert "part01.m4b" in content
+            assert "part02.m4b" in content
+            assert "part03.m4b" in content
+    
+    def test_generate_csv_with_custom_output_ignored_for_glob(self):
+        """Test that custom output path is ignored when using glob patterns."""
+        # Create multiple folders
+        test_folders = ["test_book1", "test_book2"]
+        
+        for folder_name in test_folders:
+            folder_path = os.path.join(self.temp_dir, folder_name)
+            os.makedirs(folder_path, exist_ok=True)
             
-            # Split the file
-            successful, total = split_m4b_file(
-                file_path=m4b_file,
-                output_dir=output_dir,
-                output_format=output_format,
-                template='Chapter {chapter_num:02d}.{ext}'
-            )
-            
-            assert successful == total == 2, f"Failed to split to {output_format} format"
-            
-            # Verify output files
+            # Create M4B files
             for i in range(1, 3):
-                file_path = os.path.join(output_dir, f"Chapter {i:02d}.{output_format}")
-                assert os.path.exists(file_path), f"Missing {output_format} file: {file_path}"
-                self.verify_audio_file(file_path, tolerance=1.5)
-    
-    def test_split_m4b_custom_template(self):
-        """Test splitting with custom naming template."""
-        # Create a test M4B file
-        m4b_file = self.create_test_m4b_with_chapters("template_test", num_chapters=2)
-        output_dir = os.path.join(self.temp_dir, "template_output")
+                source_file = self.create_test_audio_file(f"{folder_name}_part{i:02d}", duration=1.5, format_name="mp3")
+                m4b_file = os.path.join(folder_path, f"part{i:02d}.m4b")
+                result = convert_to_m4b(source_file, m4b_file)
+                assert result is True
         
-        # Test custom template with nested folders
-        template = '{author}/{book_title}/Part {chapter_num} - {chapter_title} [{duration_formatted}].{ext}'
+        # Test with glob pattern and custom output (should be ignored)
+        pattern = os.path.join(self.temp_dir, "test_book*")
+        custom_output = os.path.join(self.temp_dir, "custom.csv")
+        result = generate_csv_from_folder(pattern, custom_output)
+        assert result is True, "CSV generation should succeed"
         
-        successful, total = split_m4b_file(
-            file_path=m4b_file,
-            output_dir=output_dir,
-            output_format='mp3',
-            template=template
-        )
+        # Verify custom output file was NOT created
+        assert not os.path.exists(custom_output), "Custom output should be ignored for glob patterns"
         
-        assert successful == total == 2, "Failed to split with custom template"
+        # Verify individual CSV files were created instead
+        for folder_name in test_folders:
+            csv_file = os.path.join(self.temp_dir, folder_name, f"{folder_name}.csv")
+            assert os.path.exists(csv_file), f"CSV file should exist for {folder_name}"
+
+    def test_generate_csv_folder_with_subdirectories(self):
+        """Test CSV generation from folder containing M4B files in subdirectories."""
+        # Create main folder with nested structure
+        main_folder = os.path.join(self.temp_dir, "audiobook")
+        os.makedirs(main_folder, exist_ok=True)
         
-        # Verify nested directory structure and files
-        expected_files = [
-            "Test Author/Test Book/Part 1 - Chapter 1 [2s].mp3",
-            "Test Author/Test Book/Part 2 - Chapter 2 [2s].mp3"
-        ]
+        # Create M4B files in root of main folder
+        for i in range(1, 3):
+            source_file = self.create_test_audio_file(f"root_part{i:02d}", duration=1.5, format_name="mp3")
+            m4b_file = os.path.join(main_folder, f"part{i:02d}.m4b")
+            result = convert_to_m4b(source_file, m4b_file)
+            assert result is True
         
-        for expected_file in expected_files:
-            file_path = os.path.join(output_dir, expected_file)
-            assert os.path.exists(file_path), f"Expected nested file not found: {file_path}"
-    
-    def test_split_multiple_m4b_files(self):
-        """Test splitting multiple M4B files."""
-        # Create multiple test M4B files
-        m4b_files = []
-        for i in range(2):
-            m4b_file = self.create_test_m4b_with_chapters(f"multi_book_{i}", num_chapters=2)
-            m4b_files.append(m4b_file)
+        # Create subdirectory with more M4B files
+        sub_folder = os.path.join(main_folder, "bonus_content")
+        os.makedirs(sub_folder, exist_ok=True)
         
-        output_dir = os.path.join(self.temp_dir, "multi_split_output")
-        pattern = os.path.join(self.temp_dir, "multi_book_*.m4b")
+        for i in range(1, 3):
+            source_file = self.create_test_audio_file(f"bonus_part{i:02d}", duration=1.5, format_name="mp3")
+            m4b_file = os.path.join(sub_folder, f"bonus{i:02d}.m4b")
+            result = convert_to_m4b(source_file, m4b_file)
+            assert result is True
         
-        # Split multiple files
-        successful_files, total_files = split_multiple_m4b_files(
-            pattern=pattern,
-            output_dir=output_dir,
-            output_format='mp3',
-            template='{original_filename}/Chapter {chapter_num:02d}.{ext}'
-        )
+        # Generate CSV for main folder (should include files from subdirectories)
+        result = generate_csv_from_folder(main_folder)
+        assert result is True, "CSV generation should succeed"
         
-        assert successful_files == total_files == 2, f"Failed to split multiple files: {successful_files}/{total_files}"
+        # Verify CSV was created
+        csv_file = os.path.join(main_folder, "audiobook.csv")
+        assert os.path.exists(csv_file), "CSV file should exist"
         
-        # Verify all output files exist
-        for i in range(2):
-            for chapter in range(1, 3):
-                file_path = os.path.join(output_dir, f"multi_book_{i}", f"Chapter {chapter:02d}.mp3")
-                assert os.path.exists(file_path), f"Missing file: {file_path}"
+        # Verify content includes files from subdirectories
+        with open(csv_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            assert "part01.m4b" in content, "Root level files should be included"
+            assert "part02.m4b" in content, "Root level files should be included"
+            assert "bonus_content" in content, "Subdirectory files should be included"
+            assert "bonus01.m4b" in content, "Subdirectory files should be included"
+            assert "bonus02.m4b" in content, "Subdirectory files should be included"

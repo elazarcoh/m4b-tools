@@ -141,6 +141,7 @@ Examples:
   
   # Generate CSV template for combining
   m4b-tools generate-csv ./m4b_files
+  m4b-tools generate-csv "audiobooks/*"
   
   # Combine M4B files using pattern
   m4b-tools combine "*.m4b" output.m4b --title "My Book"
@@ -282,17 +283,22 @@ Examples:
   
   # Generate CSV template with custom output path
   m4b-tools generate-csv ./books ./my_template.csv
+  
+  # Generate CSV templates for multiple folders using glob patterns
+  m4b-tools generate-csv "audiobooks/*"
+  m4b-tools generate-csv "/path/to/books/series_*"
+  m4b-tools generate-csv "**/*audiobook*"
         """
     )
     
     csv_parser.add_argument(
         'folder',
-        help='Folder containing M4B files'
+        help='Folder containing M4B files or glob pattern for multiple folders (e.g., "audiobooks/*" or "**/*audiobook*")'
     )
     csv_parser.add_argument(
         'output',
         nargs='?',
-        help='Output CSV file path (default: folder_name.csv in the source folder)'
+        help='Output CSV file path (ignored when using glob patterns - each folder gets its own CSV file)'
     )
     
     # Split command
