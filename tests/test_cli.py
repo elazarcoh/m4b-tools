@@ -7,6 +7,7 @@ import tempfile
 import os
 from unittest.mock import patch, MagicMock
 from pathlib import Path
+import subprocess
 
 from m4b_tools.cli import main, create_parser
 
@@ -25,6 +26,7 @@ class TestCLI:
         assert "convert" in help_text
         assert "combine" in help_text
         assert "generate-csv" in help_text
+        assert "split" in help_text
     
     def test_convert_parser(self):
         """Test the convert subcommand parser."""
@@ -132,3 +134,53 @@ class TestCLI:
                 with patch('builtins.print') as mock_print:
                     result = main()
                     assert result == 130
+    
+    def test_split_parser(self):
+        """Test the split subcommand parser."""
+        parser = create_parser()
+        
+        # Test valid split arguments
+        args = parser.parse_args(['split', 'test.m4b', './output'])
+        assert args.command == 'split'
+        assert args.pattern == 'test.m4b'
+        assert args.output_dir == './output'
+        assert args.format == 'mp3'  # Default format
+        assert args.jobs == 1  # Default jobs
+        
+        # Test with optional arguments
+        args = parser.parse_args(['split', '*.m4b', './out', '--format', 'm4a', '--template', 'custom', '-j', '4'])
+        assert args.format == 'm4a'
+        assert args.template == 'custom'
+        assert args.jobs == 4
+    
+    def test_split_command_help(self):
+        """Test split command help text."""
+        result = subprocess.run(['python', '-m', 'm4b_tools.cli', 'split', '--help'], 
+                              capture_output=True, text=True)
+        assert result.returncode == 0
+        assert 'Split a single M4B file by chapters to MP3' in result.stdout
+        assert '--format' in result.stdout
+        assert '--template' in result.stdout
+        assert '--jobs' in result.stdout
+    
+    def test_split_command_arguments(self):
+        """Test split command argument parsing."""
+        parser = create_parser()
+        
+        # Test basic arguments
+        args = parser.parse_args(['split', 'test.m4b', './output'])
+        assert args.command == 'split'
+        assert args.pattern == 'test.m4b'
+        assert args.output_dir == './output'
+        assert args.format == 'mp3'  # default
+        assert args.jobs == 1  # default
+        
+        # Test with options
+        args = parser.parse_args(['split', '*.m4b', './out', '--format', 'm4a', '--jobs', '4'])
+        assert args.format == 'm4a'
+        assert args.jobs == 4
+        
+        # Test custom template
+        template = '{author}/{book_title}/Chapter {chapter_num:02d}.{ext}'
+        args = parser.parse_args(['split', 'book.m4b', './output', '--template', template])
+        assert args.template == template

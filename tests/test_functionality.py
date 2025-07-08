@@ -11,10 +11,10 @@ import os
 import subprocess
 import shutil
 from pathlib import Path
-from unittest.mock import patch
 
 from m4b_tools.converter import convert_to_m4b, convert_all_to_m4b
 from m4b_tools.combiner import combine_m4b_files, generate_csv_from_folder
+from m4b_tools.splitter import split_m4b_file, split_multiple_m4b_files
 from m4b_tools.utils import check_ffmpeg, get_audio_metadata
 
 
@@ -325,3 +325,190 @@ class TestAudioFunctionality:
         # Verify conversion
         assert result is True, f"Conversion from {format_name} should succeed"
         self.verify_audio_file(output_file, expected_duration=1.5)
+    
+    def create_test_m4b_with_chapters(self, filename: str, num_chapters: int = 3, 
+                                    chapter_duration: float = 2.0) -> str:
+        """
+        Create a test M4B file with chapters.
+        
+        Args:
+            filename: Name of the file (without extension)
+            num_chapters: Number of chapters to create
+            chapter_duration: Duration of each chapter in seconds
+            
+        Returns:
+            Full path to the created M4B file
+        """
+        output_path = os.path.join(self.temp_dir, f"{filename}.m4b")
+        
+        # Create a longer audio file
+        total_duration = num_chapters * chapter_duration
+        cmd = [
+            'ffmpeg', '-f', 'lavfi', 
+            '-i', f'sine=frequency=440:duration={total_duration}:sample_rate=22050',
+            '-ac', '1',  # Mono channel
+            '-c:a', 'aac',  # Use AAC codec for M4B
+            '-b:a', '64k',  # Low bitrate for test
+            '-y',  # Overwrite if exists
+            output_path
+        ]
+        
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            # Create a chapter file for FFmpeg
+            chapter_file = os.path.join(self.temp_dir, f"{filename}_chapters.txt")
+            with open(chapter_file, 'w') as f:
+                f.write(";FFMETADATA1\n")
+                f.write("title=Test Book\n")
+                f.write("album=Test Book\n") 
+                f.write("artist=Test Author\n")
+                f.write("\n")
+                
+                # Add chapter markers
+                for i in range(num_chapters):
+                    start_time = int(i * chapter_duration * 1000)  # Convert to milliseconds
+                    end_time = int((i + 1) * chapter_duration * 1000)
+                    f.write("[CHAPTER]\n")
+                    f.write("TIMEBASE=1/1000\n")
+                    f.write(f"START={start_time}\n")
+                    f.write(f"END={end_time}\n")
+                    f.write(f"title=Chapter {i + 1}\n")
+                    f.write("\n")
+            
+            # Add chapters using FFmpeg metadata
+            chapter_output = os.path.join(self.temp_dir, f"{filename}_with_chapters.m4b")
+            chapter_cmd = [
+                'ffmpeg', '-i', output_path, '-i', chapter_file,
+                '-map_metadata', '1',  # Use metadata from chapter file
+                '-c', 'copy',  # Copy streams without re-encoding
+                '-y', chapter_output
+            ]
+            
+            subprocess.run(chapter_cmd, capture_output=True, text=True, check=True)
+            
+            # Use the version with chapters
+            os.replace(chapter_output, output_path)
+            
+            # Clean up chapter file
+            os.remove(chapter_file)
+            
+            self.test_files.append(output_path)
+            return output_path
+        except subprocess.CalledProcessError as e:
+            pytest.fail(f"Failed to create test M4B file {output_path}: {e.stderr}")
+    
+    def test_split_m4b_by_chapters(self):
+        """Test splitting an M4B file by chapters."""
+        # Create a test M4B file 
+        m4b_file = self.create_test_m4b_with_chapters("test_book", num_chapters=3)
+        
+        # Create output directory
+        output_dir = os.path.join(self.temp_dir, "split_output")
+        
+        # Split the file
+        successful, total = split_m4b_file(
+            file_path=m4b_file,
+            output_dir=output_dir,
+            output_format='mp3',
+            template='{book_title}/Chapter {chapter_num:02d} - {chapter_title}.{ext}'
+        )
+        
+        # Verify split was successful
+        assert successful == total == 3, f"Expected 3 chapters split, got {successful}/{total}"
+        
+        # Verify output files exist
+        expected_files = [
+            "Test Book/Chapter 01 - Chapter 1.mp3",
+            "Test Book/Chapter 02 - Chapter 2.mp3", 
+            "Test Book/Chapter 03 - Chapter 3.mp3"
+        ]
+        
+        for expected_file in expected_files:
+            file_path = os.path.join(output_dir, expected_file)
+            assert os.path.exists(file_path), f"Expected output file not found: {file_path}"
+            assert os.path.getsize(file_path) > 0, f"Output file is empty: {file_path}"
+            
+            # Verify it's a valid audio file
+            self.verify_audio_file(file_path, expected_duration=2.0, tolerance=1.0)
+    
+    def test_split_m4b_different_formats(self):
+        """Test splitting M4B to different output formats."""
+        # Create a test M4B file
+        m4b_file = self.create_test_m4b_with_chapters("format_test", num_chapters=2)
+        
+        formats_to_test = ['mp3', 'm4a', 'flac']
+        
+        for output_format in formats_to_test:
+            output_dir = os.path.join(self.temp_dir, f"split_{output_format}")
+            
+            # Split the file
+            successful, total = split_m4b_file(
+                file_path=m4b_file,
+                output_dir=output_dir,
+                output_format=output_format,
+                template='Chapter {chapter_num:02d}.{ext}'
+            )
+            
+            assert successful == total == 2, f"Failed to split to {output_format} format"
+            
+            # Verify output files
+            for i in range(1, 3):
+                file_path = os.path.join(output_dir, f"Chapter {i:02d}.{output_format}")
+                assert os.path.exists(file_path), f"Missing {output_format} file: {file_path}"
+                self.verify_audio_file(file_path, tolerance=1.5)
+    
+    def test_split_m4b_custom_template(self):
+        """Test splitting with custom naming template."""
+        # Create a test M4B file
+        m4b_file = self.create_test_m4b_with_chapters("template_test", num_chapters=2)
+        output_dir = os.path.join(self.temp_dir, "template_output")
+        
+        # Test custom template with nested folders
+        template = '{author}/{book_title}/Part {chapter_num} - {chapter_title} [{duration_formatted}].{ext}'
+        
+        successful, total = split_m4b_file(
+            file_path=m4b_file,
+            output_dir=output_dir,
+            output_format='mp3',
+            template=template
+        )
+        
+        assert successful == total == 2, "Failed to split with custom template"
+        
+        # Verify nested directory structure and files
+        expected_files = [
+            "Test Author/Test Book/Part 1 - Chapter 1 [2s].mp3",
+            "Test Author/Test Book/Part 2 - Chapter 2 [2s].mp3"
+        ]
+        
+        for expected_file in expected_files:
+            file_path = os.path.join(output_dir, expected_file)
+            assert os.path.exists(file_path), f"Expected nested file not found: {file_path}"
+    
+    def test_split_multiple_m4b_files(self):
+        """Test splitting multiple M4B files."""
+        # Create multiple test M4B files
+        m4b_files = []
+        for i in range(2):
+            m4b_file = self.create_test_m4b_with_chapters(f"multi_book_{i}", num_chapters=2)
+            m4b_files.append(m4b_file)
+        
+        output_dir = os.path.join(self.temp_dir, "multi_split_output")
+        pattern = os.path.join(self.temp_dir, "multi_book_*.m4b")
+        
+        # Split multiple files
+        successful_files, total_files = split_multiple_m4b_files(
+            pattern=pattern,
+            output_dir=output_dir,
+            output_format='mp3',
+            template='{original_filename}/Chapter {chapter_num:02d}.{ext}'
+        )
+        
+        assert successful_files == total_files == 2, f"Failed to split multiple files: {successful_files}/{total_files}"
+        
+        # Verify all output files exist
+        for i in range(2):
+            for chapter in range(1, 3):
+                file_path = os.path.join(output_dir, f"multi_book_{i}", f"Chapter {chapter:02d}.mp3")
+                assert os.path.exists(file_path), f"Missing file: {file_path}"

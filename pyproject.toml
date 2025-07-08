@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "m4b-tools"
 version = "1.0.0"
-description = "Tools for converting audio files to M4B format and combining M4B files with chapters"
+description = "Tools for converting audio files to M4B format, combining M4B files with chapters, and splitting M4B files by chapters"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [

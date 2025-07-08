@@ -10,11 +10,11 @@ Provides a unified entry point for all M4B tools functionality:
 import argparse
 import logging
 import sys
-from typing import Optional
 
 from . import __version__
 from .converter import convert_all_to_m4b
 from .combiner import combine_m4b_files, generate_csv_from_folder
+from .splitter import split_multiple_m4b_files
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -99,6 +99,35 @@ def cmd_generate_csv(args) -> int:
         return 1
 
 
+def cmd_split(args) -> int:
+    """Handle the split command."""
+    setup_logging(args.verbose)
+    
+    # Validate arguments
+    if not args.pattern:
+        print("Error: Pattern must be provided", file=sys.stderr)
+        return 1
+    
+    # Split files
+    successful_files, total_files = split_multiple_m4b_files(
+        pattern=args.pattern,
+        output_dir=args.output_dir,
+        output_format=args.format,
+        template=args.template,
+        max_workers=args.jobs
+    )
+    
+    if successful_files == total_files and total_files > 0:
+        print(f"✅ All {total_files} files split successfully!")
+        return 0
+    elif successful_files > 0:
+        print(f"⚠️  {successful_files}/{total_files} files split successfully")
+        return 0
+    else:
+        print("❌ Failed to split M4B files")
+        return 1
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the main argument parser."""
     parser = argparse.ArgumentParser(
@@ -118,6 +147,9 @@ Examples:
   
   # Combine M4B files using CSV
   m4b-tools combine --csv book_files.csv
+  
+  # Split M4B files by chapters
+  m4b-tools split "*.m4b" ./output_dir
         """
     )
     
@@ -263,6 +295,53 @@ Examples:
         help='Output CSV file path (default: folder_name.csv in the source folder)'
     )
     
+    # Split command
+    split_parser = subparsers.add_parser(
+        'split',
+        help='Split M4B files by chapters into various formats',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Split a single M4B file by chapters to MP3
+  m4b-tools split "audiobook.m4b" ./output_chapters
+  
+  # Split multiple M4B files to M4A format
+  m4b-tools split "*.m4b" ./chapters --format m4a
+  
+  # Split with custom naming template
+  m4b-tools split "book.m4b" ./output --template "{author}/{book_title}/Chapter {chapter_num:02d} - {chapter_title}.{ext}"
+  
+  # Split with parallel processing
+  m4b-tools split "**/*.m4b" ./output -j 4
+        """
+    )
+    
+    split_parser.add_argument(
+        'pattern',
+        help='Glob pattern to match M4B files (e.g., "*.m4b" or "audiobooks/**/*.m4b")'
+    )
+    split_parser.add_argument(
+        'output_dir',
+        help='Output directory for split chapter files'
+    )
+    split_parser.add_argument(
+        '--format', '-f',
+        choices=['mp3', 'm4a', 'm4b', 'aac', 'ogg', 'flac'],
+        default='mp3',
+        help='Output format for chapter files (default: mp3)'
+    )
+    split_parser.add_argument(
+        '--template', '-t',
+        default='{book_title}/{chapter_num:02d} - {chapter_title}.{ext}',
+        help='Naming template for output files. Available variables: {book_title}, {author}, {narrator}, {chapter_num}, {chapter_title}, {genre}, {year}, {original_filename}, {duration}, {duration_formatted}, {ext}'
+    )
+    split_parser.add_argument(
+        '--jobs', '-j',
+        type=int,
+        default=1,
+        help='Number of parallel chapter extraction processes (default: 1)'
+    )
+    
     return parser
 
 
@@ -282,6 +361,8 @@ def main() -> int:
             return cmd_combine(args)
         elif args.command == 'generate-csv':
             return cmd_generate_csv(args)
+        elif args.command == 'split':
+            return cmd_split(args)
         else:
             print(f"Unknown command: {args.command}", file=sys.stderr)
             return 1

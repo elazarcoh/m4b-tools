@@ -1,6 +1,6 @@
 # M4B Tools
 
-A Python package for converting audio files to M4B format and combining M4B files with chapters. This package provides both a command-line interface and a programmatic API for audiobook management.
+A Python package for converting audio files to M4B format, combining M4B files with chapters, and splitting M4B files by chapters. This package provides both a command-line interface and a programmatic API for comprehensive audiobook management.
 
 ## Installation
 
@@ -66,6 +66,9 @@ m4b-tools combine "*.m4b" output.m4b --title "My Book"
 
 # Combine M4B files using CSV
 m4b-tools combine --csv book_files.csv
+
+# Split M4B files by chapters
+m4b-tools split "*.m4b" ./output_chapters
 ```
 
 ## Programmatic API
@@ -210,6 +213,53 @@ python combine-m4b-chapters.py generate-csv /path/to/audiobook/folder
 python combine-m4b-chapters.py generate-csv /path/to/folder --output my_book.csv
 ```
 
+##### `split` - Split M4B files by chapters
+```bash
+m4b-tools split [options] pattern output_dir
+```
+
+**Arguments:**
+- `pattern`: Glob pattern to match M4B files (e.g., "*.m4b" or "audiobook.m4b")
+- `output_dir`: Output directory for split chapter files
+
+**Options:**
+- `--format, -f`: Output format for chapter files (choices: mp3, m4a, m4b, aac, ogg, flac, default: mp3)
+- `--template, -t`: Naming template for output files (default: `{book_title}/{chapter_num:02d} - {chapter_title}.{ext}`)
+- `--jobs, -j`: Number of parallel chapter extraction processes (default: 1)
+- `--verbose, -v`: Enable verbose logging
+
+**Template Variables:**
+- `{book_title}`: Book title from metadata or filename
+- `{author}`: Author from metadata
+- `{narrator}`: Narrator from metadata
+- `{chapter_num}`: Chapter number (1-based)
+- `{chapter_title}`: Chapter title
+- `{genre}`: Genre from metadata
+- `{year}`: Publication year from metadata
+- `{original_filename}`: Original M4B filename (without extension)
+- `{duration}`: Chapter duration (e.g., "120s")
+- `{duration_formatted}`: Formatted duration (e.g., "2m 0s")
+- `{ext}`: Output file extension
+
+**Examples:**
+```bash
+# Split a single M4B file by chapters to MP3
+m4b-tools split "audiobook.m4b" ./output_chapters
+
+# Split multiple M4B files to M4A format
+m4b-tools split "*.m4b" ./chapters --format m4a
+
+# Split with custom naming template and nested folders
+m4b-tools split "book.m4b" ./output --template "{author}/{book_title}/Chapter {chapter_num:02d} - {chapter_title}.{ext}"
+
+# Split with parallel processing for faster extraction
+m4b-tools split "**/*.m4b" ./output -j 4
+
+# Split to different formats
+m4b-tools split "audiobook.m4b" ./flac_chapters --format flac
+m4b-tools split "audiobook.m4b" ./m4b_chapters --format m4b
+```
+
 #### CSV Format for Advanced Metadata
 
 The CSV format allows you to specify detailed metadata and chapter titles:
@@ -268,123 +318,40 @@ python convert-all-to-m4b.py "book_chapters/*.flac" ./temp_m4b
 python combine-m4b-chapters.py combine "temp_m4b/*.m4b" final_book.m4b --title "Complete Audiobook"
 ```
 
-## Features
+### Splitting Audiobooks by Chapters
 
-### convert-all-to-m4b.py Features:
-- ✅ Batch conversion of multiple audio formats
-- ✅ Directory structure preservation
-- ✅ Parallel processing support
-- ✅ Progress tracking with visual progress bars
-- ✅ Comprehensive logging
-- ✅ File size and duration reporting
-- ✅ Automatic output directory creation
-- ✅ Skip existing files
+1. **Split a single M4B audiobook into MP3 chapters:**
+   ```bash
+   m4b-tools split "complete_audiobook.m4b" ./chapters
+   ```
 
-### combine-m4b-chapters.py Features:
-- ✅ Chapter creation from individual files
-- ✅ Metadata preservation and enhancement
-- ✅ CSV-based configuration
-- ✅ Cover art support (local files and URLs)
-- ✅ Existing chapter structure preservation
-- ✅ Audio compatibility checking
-- ✅ Automatic re-encoding when needed
-- ✅ Comprehensive metadata support
-- ✅ Natural filename sorting
+2. **Split multiple audiobooks with custom naming:**
+   ```bash
+   m4b-tools split "*.m4b" ./split_books --template "{author}/{book_title}/Part {chapter_num:02d} - {chapter_title}.{ext}"
+   ```
 
-## Audio Quality Settings
+3. **Convert chapters to different formats:**
+   ```bash
+   # Split to high-quality FLAC
+   m4b-tools split "audiobook.m4b" ./flac_chapters --format flac
+   
+   # Split to M4A for Apple devices
+   m4b-tools split "audiobook.m4b" ./m4a_chapters --format m4a
+   ```
 
-Both scripts are optimized for audiobook content:
-- **Bitrate**: 64k (suitable for spoken content)
-- **Format**: M4B (audiobook format)
-- **Channels**: Stereo (or original channel count)
-- **Codec**: AAC (high compatibility)
+4. **Parallel processing for large files:**
+   ```bash
+   m4b-tools split "large_audiobook.m4b" ./chapters --jobs 4
+   ```
 
-## Troubleshooting
-
-### Common Issues:
-
-1. **FFmpeg not found**
-   - Ensure FFmpeg is installed and in your PATH
-   - Verify with: `ffmpeg -version`
-
-2. **Permission errors**
-   - Check write permissions for output directories
-   - Run with appropriate permissions
-
-3. **Memory issues with large files**
-   - Reduce the number of parallel jobs (`-j` option)
-   - Process files in smaller batches
-
-4. **Progress bar not showing**
-   - Install tqdm: `pip install tqdm`
-   - Use `--progress-bar` or `-p` flag
-
-### Getting Help:
-
-```bash
-# Get help for conversion script
-python convert-all-to-m4b.py --help
-
-# Get help for combination script
-python combine-m4b-chapters.py --help
-
-# Get help for specific commands
-python combine-m4b-chapters.py combine --help
-python combine-m4b-chapters.py generate-csv --help
-```
-
-## Testing
-
-The package includes comprehensive tests covering both unit tests and integration tests with actual audio files.
-
-### Running Tests
-
-Install test dependencies:
-```bash
-pip install .[test]
-```
-
-Run all tests:
-```bash
-pytest tests/
-```
-
-Run specific test categories:
-```bash
-# Unit tests only
-pytest tests/test_cli.py tests/test_init.py tests/test_utils.py
-
-# Functionality tests with real audio files
-pytest tests/test_functionality.py
-
-# Run with verbose output
-pytest tests/ -v
-```
-
-### Test Coverage
-
-The test suite includes:
-
-- **Unit Tests**: Testing individual functions and CLI parsing
-- **Integration Tests**: Testing actual audio conversion and merging with real files
-- **Error Handling**: Testing edge cases and invalid inputs
-- **Multiple Formats**: Testing conversion from MP3, FLAC, and M4A formats
-- **End-to-End Workflows**: Testing complete conversion and combination workflows
-
-The functionality tests create real audio files using FFmpeg, test actual conversions, and verify the output files have the expected properties. Tests automatically clean up temporary files and skip if FFmpeg is not available.
-
-## Project Background
-
-This project was created using **Vibe Coding** as a practice exercise for working with **GitHub Copilot's agent mode**. It demonstrates:
-
-- Automated code generation and refinement
-- AI-assisted development workflows
-- Best practices for Python CLI tools
-- Audio processing with FFmpeg
-- Comprehensive documentation generation
-
-The tools are designed to be practical for audiobook enthusiasts who need to convert and organize their audio collections into the M4B format with proper chapter structure.
-
-## License
-
-This project is provided as-is for educational and personal use.
+### m4b-tools split Features:
+- ✅ Split M4B files by chapters into multiple formats
+- ✅ Support for MP3, M4A, M4B, AAC, OGG, and FLAC output
+- ✅ Flexible naming templates with metadata variables
+- ✅ Nested directory structure support
+- ✅ Metadata preservation in split files
+- ✅ Parallel chapter extraction for performance
+- ✅ Automatic filename sanitization
+- ✅ Chapter detection from M4B files
+- ✅ Fallback to single chapter for files without chapters
+- ✅ Comprehensive error handling and logging
