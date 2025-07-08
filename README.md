@@ -333,6 +333,46 @@ python combine-m4b-chapters.py combine --help
 python combine-m4b-chapters.py generate-csv --help
 ```
 
+## Testing
+
+The package includes comprehensive tests covering both unit tests and integration tests with actual audio files.
+
+### Running Tests
+
+Install test dependencies:
+```bash
+pip install .[test]
+```
+
+Run all tests:
+```bash
+pytest tests/
+```
+
+Run specific test categories:
+```bash
+# Unit tests only
+pytest tests/test_cli.py tests/test_init.py tests/test_utils.py
+
+# Functionality tests with real audio files
+pytest tests/test_functionality.py
+
+# Run with verbose output
+pytest tests/ -v
+```
+
+### Test Coverage
+
+The test suite includes:
+
+- **Unit Tests**: Testing individual functions and CLI parsing
+- **Integration Tests**: Testing actual audio conversion and merging with real files
+- **Error Handling**: Testing edge cases and invalid inputs
+- **Multiple Formats**: Testing conversion from MP3, FLAC, and M4A formats
+- **End-to-End Workflows**: Testing complete conversion and combination workflows
+
+The functionality tests create real audio files using FFmpeg, test actual conversions, and verify the output files have the expected properties. Tests automatically clean up temporary files and skip if FFmpeg is not available.
+
 ## Project Background
 
 This project was created using **Vibe Coding** as a practice exercise for working with **GitHub Copilot's agent mode**. It demonstrates:
