@@ -31,7 +31,7 @@ def patch_extract_chapters(monkeypatch):
             'channels': '2',
         }
         return chapters, metadata
-    monkeypatch.setattr('m4b_tools.splitter.extract_chapters_from_m4b', fake_extract_chapters_from_m4b)
+    monkeypatch.setattr('m4b_tools.metadata.extract_chapters_from_m4b', fake_extract_chapters_from_m4b)
 
 def test_dump_m4b_metadata_csv(tmp_path, patch_extract_chapters):
     out_file = tmp_path / 'meta.csv'
