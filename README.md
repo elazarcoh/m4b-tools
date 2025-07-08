@@ -139,6 +139,9 @@ m4b-tools combine --csv book_files.csv
 
 # Split M4B files by chapters
 m4b-tools split "*.m4b" ./output_chapters
+
+# Dump M4B metadata as CSV (one row per chapter, all metadata repeated per row)
+m4b-tools metadata audiobook.m4b --output metadata.csv
 ```
 
 ## Advanced API Usage

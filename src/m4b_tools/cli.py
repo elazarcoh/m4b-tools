@@ -128,6 +128,11 @@ def cmd_split(args) -> int:
         return 1
 
 
+def cmd_metadata(args) -> int:
+    from .metadata import dump_m4b_metadata
+    return dump_m4b_metadata(args.file, format=args.format, output_file=args.output)
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the main argument parser."""
     parser = argparse.ArgumentParser(
@@ -151,6 +156,8 @@ Examples:
   
   # Split M4B files by chapters
   m4b-tools split "*.m4b" ./output_dir
+  
+  m4b-tools metadata audiobook.m4b --output metadata.csv
         """
     )
     
@@ -347,7 +354,37 @@ Examples:
         default=1,
         help='Number of parallel chapter extraction processes (default: 1)'
     )
-    
+
+    # Metadata command (inlined)
+    metadata_parser = subparsers.add_parser(
+        'metadata',
+        help='Dump M4B metadata in CSV format',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Dump metadata as CSV (default)
+  m4b-tools metadata audiobook.m4b
+
+  # Write output to a file
+  m4b-tools metadata audiobook.m4b --output meta.csv
+        """
+    )
+    metadata_parser.add_argument(
+        'file',
+        help='Path to the M4B file'
+    )
+    metadata_parser.add_argument(
+        '--format', '-f',
+        choices=['csv'],
+        default='csv',
+        help='Output format: csv (default)'
+    )
+    metadata_parser.add_argument(
+        '--output', '-o',
+        help='Output file path (writes to stdout if not provided)'
+    )
+    metadata_parser.set_defaults(func=cmd_metadata)
+
     return parser
 
 
@@ -369,6 +406,8 @@ def main() -> int:
             return cmd_generate_csv(args)
         elif args.command == 'split':
             return cmd_split(args)
+        elif args.command == 'metadata':
+            return cmd_metadata(args)
         else:
             print(f"Unknown command: {args.command}", file=sys.stderr)
             return 1
