@@ -2,6 +2,13 @@
 
 A Python package for converting audio files to M4B format, combining M4B files with chapters, and splitting M4B files by chapters. This package provides both a command-line interface and a programmatic API for comprehensive audiobook management.
 
+---
+
+**About this project:**  
+This project is a (successful!) experiment in using AI to generate an entire Python package from scratch. All code, documentation, and design were created with the help of GitHub Copilot (both Agent mode in VSCode and the coding agent on GitHub web), without manual coding. The process demonstrates the power and practicality of modern AI tools for real-world software development.
+
+---
+
 ## Quick Start
 
 Install using pipx for an isolated command-line tool:
