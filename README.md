@@ -1,9 +1,39 @@
 # M4B Tools
 
-A collection of Python scripts for converting audio files to M4B format and combining M4B files with chapters. This project was generated using Vibe Coding and serves as practice for using GitHub Copilot's agent mode.
+A Python package for converting audio files to M4B format and combining M4B files with chapters. This package provides both a command-line interface and a programmatic API for audiobook management.
+
+## Installation
+
+Install from source using pip:
+
+```bash
+pip install .
+```
+
+For development installation:
+
+```bash
+pip install -e .
+```
+
+For installation with optional dependencies:
+
+```bash
+pip install .[progress]  # Includes tqdm for progress bars
+pip install .[test]      # Includes test dependencies
+```
+
+### pipx Installation
+
+For isolated installation as a command-line tool:
+
+```bash
+pipx install .
+```
 
 ## Prerequisites
 
+- **Python 3.7+**: Required for the package
 - **FFmpeg**: Required for audio conversion and processing
   ```bash
   # Ubuntu/Debian
@@ -16,10 +46,60 @@ A collection of Python scripts for converting audio files to M4B format and comb
   choco install ffmpeg
   ```
 
-- **Python 3.7+** with the following optional dependencies:
-  ```bash
-  pip install tqdm  # For progress bars
-  ```
+## Command-Line Interface
+
+After installation, use the `m4b-tools` command:
+
+```bash
+# Show help
+m4b-tools --help
+
+# Convert audio files to M4B
+m4b-tools convert "**/*.mp3" ./output
+m4b-tools convert "books/**/*.flac" ./converted -p -j 4
+
+# Generate CSV template for combining
+m4b-tools generate-csv ./m4b_files
+
+# Combine M4B files using pattern
+m4b-tools combine "*.m4b" output.m4b --title "My Book"
+
+# Combine M4B files using CSV
+m4b-tools combine --csv book_files.csv
+```
+
+## Programmatic API
+
+Use M4B Tools in your Python code:
+
+```python
+import m4b_tools
+
+# Convert a single file
+success = m4b_tools.convert_to_m4b("input.mp3", "output.m4b")
+
+# Batch convert files
+successful, total = m4b_tools.convert_all_to_m4b(
+    "**/*.mp3", 
+    "./output",
+    show_progress_bar=True,
+    max_workers=4
+)
+
+# Combine M4B files
+success = m4b_tools.combine_m4b_files(
+    input_pattern="*.m4b",
+    output_file="combined.m4b",
+    title="My Audiobook"
+)
+
+# Generate CSV template
+success = m4b_tools.generate_csv_from_folder("./m4b_files")
+```
+
+## Legacy Scripts (Deprecated)
+
+The original scripts are still available but deprecated. Use the `m4b-tools` command instead.
 
 ## Scripts Overview
 
@@ -252,6 +332,46 @@ python combine-m4b-chapters.py --help
 python combine-m4b-chapters.py combine --help
 python combine-m4b-chapters.py generate-csv --help
 ```
+
+## Testing
+
+The package includes comprehensive tests covering both unit tests and integration tests with actual audio files.
+
+### Running Tests
+
+Install test dependencies:
+```bash
+pip install .[test]
+```
+
+Run all tests:
+```bash
+pytest tests/
+```
+
+Run specific test categories:
+```bash
+# Unit tests only
+pytest tests/test_cli.py tests/test_init.py tests/test_utils.py
+
+# Functionality tests with real audio files
+pytest tests/test_functionality.py
+
+# Run with verbose output
+pytest tests/ -v
+```
+
+### Test Coverage
+
+The test suite includes:
+
+- **Unit Tests**: Testing individual functions and CLI parsing
+- **Integration Tests**: Testing actual audio conversion and merging with real files
+- **Error Handling**: Testing edge cases and invalid inputs
+- **Multiple Formats**: Testing conversion from MP3, FLAC, and M4A formats
+- **End-to-End Workflows**: Testing complete conversion and combination workflows
+
+The functionality tests create real audio files using FFmpeg, test actual conversions, and verify the output files have the expected properties. Tests automatically clean up temporary files and skip if FFmpeg is not available.
 
 ## Project Background
 
