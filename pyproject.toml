@@ -75,3 +75,15 @@ exclude_lines = [
     "if 0:",
     "if __name__ == .__main__.:",
 ]
+
+[tool.hatch.envs.default]
+dependencies = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "tqdm",
+]
+
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+cov = "pytest --cov=src/m4b_tools --cov-report=term-missing --cov-report=html {args:tests}"
+cov-report = "coverage report"
