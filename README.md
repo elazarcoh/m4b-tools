@@ -89,32 +89,32 @@ success = m4b_tools.generate_csv_from_folder("./m4b_files")
 
 ## Development
 
-This project uses [Hatch](https://hatch.pypa.io/) for development environment management.
+This project uses [UV](https://docs.astral.sh/uv/) for development environment management. For more details, visit the [official UV documentation](https://docs.astral.sh/uv/).
 
 ### Installation for Development
 
-```bash
-# Install hatch
-pip install hatch
+Follow the [official UV documentation](https://docs.astral.sh/uv/) to install UV.
 
+```bash
 # Clone the repository
 git clone https://github.com/elazarcoh/m4b-tools.git
 cd m4b-tools
 
-# Create and enter development environment
-hatch shell
+# Set up the development environment
+uv sync
+uv build
 ```
 
 ### Running Tests
 
 ```bash
 # Run all tests
-hatch run test
+uv run hatch test
 
 # Run tests with coverage report
-hatch run cov
+uv run hatch run cov
 
-# View coverage report (after running 'hatch run cov')
+# View coverage report (after running 'uv run hatch run cov')
 # Opens HTML report: htmlcov/index.html
 ```
 
