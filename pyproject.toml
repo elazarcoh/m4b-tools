@@ -76,6 +76,11 @@ exclude_lines = [
     "if __name__ == .__main__.:",
 ]
 
+[dependency-groups]
+dev = [
+    "hatch>=1.7.0",
+]
+
 [tool.hatch.envs.default]
 dependencies = [
     "pytest>=6.0",
