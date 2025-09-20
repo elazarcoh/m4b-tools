@@ -16,7 +16,7 @@ Main functions:
 - generate_csv_from_folder: Generate CSV template from M4B files in a folder
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "M4B Tools Contributors"
 
 # Import main functions for API access
