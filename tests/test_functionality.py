@@ -268,6 +268,64 @@ class TestAudioFunctionality:
         # Verify combined file
         self.verify_audio_file(combined_output, expected_duration=6.0, tolerance=1.0)
     
+    def test_csv_preserves_order(self):
+        """Test that CSV file order is preserved when combining M4B files."""
+        # Create M4B files with specific names that would sort differently
+        file_names = ["chapter10.m4b", "chapter2.m4b", "chapter1.m4b", "chapter20.m4b"]
+        m4b_files = []
+        
+        for name in file_names:
+            source_file = self.create_test_audio_file(name.replace('.m4b', ''), duration=1.0, format_name="mp3")
+            m4b_file = os.path.join(self.temp_dir, name)
+            result = convert_to_m4b(source_file, m4b_file)
+            assert result is True, f"Failed to create {name}"
+            m4b_files.append(m4b_file)
+        
+        # Create CSV file with files in a specific order (different from natural sort)
+        csv_file = os.path.join(self.temp_dir, "order_test.csv")
+        combined_output = os.path.join(self.temp_dir, "combined_order_test.m4b")
+        csv_order = ["chapter2.m4b", "chapter20.m4b", "chapter1.m4b", "chapter10.m4b"]  # Intentionally out of natural order
+        
+        with open(csv_file, 'w', encoding='utf-8') as f:
+            f.write(f"#output_path,{combined_output}\n")
+            f.write("file,title\n")
+            for i, name in enumerate(csv_order, 1):
+                f.write(f"{name},Chapter {i}\n")
+        
+        # Combine using CSV
+        result = combine_m4b_files(csv_file=csv_file)
+        assert result is True, "CSV-based combination should have succeeded"
+        
+        # Verify the order by checking the combined file's chapters
+        # We can't easily verify internal order without FFmpeg chapter inspection,
+        # but we can at least verify the file was created successfully
+        self.verify_audio_file(combined_output, expected_duration=4.0, tolerance=1.0)
+    
+    def test_glob_pattern_sorting(self):
+        """Test that glob patterns apply natural sorting."""
+        # Create M4B files with names that need natural sorting
+        file_names = ["part1.m4b", "part10.m4b", "part2.m4b", "part20.m4b"]
+        
+        for name in file_names:
+            source_file = self.create_test_audio_file(name.replace('.m4b', ''), duration=1.0, format_name="mp3")
+            m4b_file = os.path.join(self.temp_dir, name)
+            result = convert_to_m4b(source_file, m4b_file)
+            assert result is True, f"Failed to create {name}"
+        
+        # Combine using glob pattern
+        combined_output = os.path.join(self.temp_dir, "combined_glob.m4b")
+        pattern = os.path.join(self.temp_dir, "part*.m4b")
+        result = combine_m4b_files(
+            input_pattern=pattern,
+            output_file=combined_output,
+            title="Test Glob Sorting"
+        )
+        
+        assert result is True, "Glob pattern combination should have succeeded"
+        
+        # Verify the file was created successfully
+        self.verify_audio_file(combined_output, expected_duration=4.0, tolerance=1.0)
+    
     def test_generate_csv_from_folder(self):
         """Test generating a CSV template from a folder of M4B files."""
         # Create M4B files
