@@ -614,6 +614,9 @@ def combine_m4b_files(input_pattern: Optional[str] = None, output_file: Optional
         matching_files = glob.glob(input_pattern, recursive=True)
         m4b_files = [os.path.abspath(f) for f in matching_files if Path(f).suffix.lower() in {'.m4b', '.m4a'}]
         
+        # Sort files naturally for glob patterns (handles numbers correctly)
+        m4b_files.sort(key=lambda x: natural_sort_key(os.path.basename(x)))
+        
         # Create file_title_list for consistency
         file_title_list: List[FileEntry] = [{'file': f, 'title': ''} for f in m4b_files]
     
@@ -625,9 +628,6 @@ def combine_m4b_files(input_pattern: Optional[str] = None, output_file: Optional
     if not output_file:
         logger.error("Output file must be specified")
         return False
-    
-    # Sort files naturally (handles numbers correctly)
-    m4b_files.sort(key=lambda x: natural_sort_key(os.path.basename(x)))
     
     logger.info(f"Found {len(m4b_files)} M4B files to combine:")
     for i, file_path in enumerate(m4b_files, 1):
