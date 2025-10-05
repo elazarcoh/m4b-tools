@@ -20,31 +20,39 @@ from .splitter import split_multiple_m4b_files
 def setup_logging(verbose: bool = False) -> None:
     """Set up logging configuration."""
     level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=level, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 def cmd_convert(args) -> int:
     """Handle the convert command."""
     setup_logging(args.verbose)
-    
+
     # Validate jobs argument
     if args.jobs < 1:
         print("Error: Number of jobs must be at least 1", file=sys.stderr)
         return 1
-    
+
+    # Validate codec
+    valid_codecs = ["aac", "aac_he", "alac"]
+    if args.codec not in valid_codecs:
+        print(
+            f"Error: Invalid codec '{args.codec}'. Must be one of: {', '.join(valid_codecs)}",
+            file=sys.stderr,
+        )
+        return 1
+
     # Convert files
     successful, total = convert_all_to_m4b(
-        args.pattern, 
-        args.output_dir, 
+        args.pattern,
+        args.output_dir,
         preserve_structure=not args.flat,
         show_progress_bar=args.progress_bar,
         base_input_path=args.base_input_path,
-        max_workers=args.jobs
+        max_workers=args.jobs,
+        codec=args.codec,
+        bitrate=args.bitrate,
     )
-    
+
     if successful == total:
         print(f"✅ All {total} files converted successfully!")
         return 0
@@ -56,16 +64,27 @@ def cmd_convert(args) -> int:
 def cmd_combine(args) -> int:
     """Handle the combine command."""
     setup_logging(args.verbose)
-    
+
     # Validate arguments
     if not args.csv and not args.pattern:
         print("Error: Either pattern or --csv must be provided", file=sys.stderr)
         return 1
-    
+
     if not args.csv and not args.output:
-        print("Error: Output file must be specified when not using CSV", file=sys.stderr)
+        print(
+            "Error: Output file must be specified when not using CSV", file=sys.stderr
+        )
         return 1
-    
+
+    # Validate codec
+    valid_codecs = ["aac", "aac_he", "alac"]
+    if args.codec not in valid_codecs:
+        print(
+            f"Error: Invalid codec '{args.codec}'. Must be one of: {', '.join(valid_codecs)}",
+            file=sys.stderr,
+        )
+        return 1
+
     # Combine files
     success = combine_m4b_files(
         input_pattern=args.pattern,
@@ -73,9 +92,11 @@ def cmd_combine(args) -> int:
         title=args.title,
         preserve_existing_chapters=args.preserve_chapters,
         temp_dir=args.temp_dir,
-        csv_file=args.csv
+        csv_file=args.csv,
+        codec=args.codec,
+        bitrate=args.bitrate,
     )
-    
+
     if success:
         output_name = args.output or "output from CSV"
         print(f"✅ Successfully combined M4B files into {output_name}")
@@ -88,7 +109,7 @@ def cmd_combine(args) -> int:
 def cmd_generate_csv(args) -> int:
     """Handle the generate-csv command."""
     setup_logging(args.verbose)
-    
+
     # Generate CSV template
     success = generate_csv_from_folder(args.folder, args.output)
     if success:
@@ -102,21 +123,21 @@ def cmd_generate_csv(args) -> int:
 def cmd_split(args) -> int:
     """Handle the split command."""
     setup_logging(args.verbose)
-    
+
     # Validate arguments
     if not args.pattern:
         print("Error: Pattern must be provided", file=sys.stderr)
         return 1
-    
+
     # Split files
     successful_files, total_files = split_multiple_m4b_files(
         pattern=args.pattern,
         output_dir=args.output_dir,
         output_format=args.format,
         template=args.template,
-        max_workers=args.jobs
+        max_workers=args.jobs,
     )
-    
+
     if successful_files == total_files and total_files > 0:
         print(f"✅ All {total_files} files split successfully!")
         return 0
@@ -130,6 +151,7 @@ def cmd_split(args) -> int:
 
 def cmd_metadata(args) -> int:
     from .metadata import dump_m4b_metadata
+
     return dump_m4b_metadata(args.file, format=args.format, output_file=args.output)
 
 
@@ -158,28 +180,24 @@ Examples:
   m4b-tools split "*.m4b" ./output_dir
   
   m4b-tools metadata audiobook.m4b --output metadata.csv
-        """
+        """,
     )
-    
+
     parser.add_argument(
-        '--version',
-        action='version',
-        version=f'M4B Tools {__version__}'
+        "--version", action="version", version=f"M4B Tools {__version__}"
     )
-    
+
     parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose logging'
+        "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
-    
+
     # Create subparsers for different commands
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
-    
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
     # Convert command
     convert_parser = subparsers.add_parser(
-        'convert',
-        help='Convert audio files to M4B format',
+        "convert",
+        help="Convert audio files to M4B format",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -194,42 +212,56 @@ Examples:
   
   # Convert to flat structure (all files in one directory)
   m4b-tools convert "**/*.flac" ./output --flat
-        """
+        """,
     )
-    
+
     convert_parser.add_argument(
-        'pattern', 
-        help='Glob pattern to match audio files (e.g., "**/*.mp3" or "/path/to/books/**/*.flac")'
-    )
-    convert_parser.add_argument(
-        'output_dir',
-        help='Output base directory for converted M4B files'
+        "pattern",
+        help='Glob pattern to match audio files (e.g., "**/*.mp3" or "/path/to/books/**/*.flac")',
     )
     convert_parser.add_argument(
-        '--base-input-path', '-b',
-        help='Base input path for determining relative directory structure'
+        "output_dir", help="Output base directory for converted M4B files"
     )
     convert_parser.add_argument(
-        '--flat',
-        action='store_true',
-        help='Save all files in output directory without preserving structure'
+        "--base-input-path",
+        "-b",
+        help="Base input path for determining relative directory structure",
     )
     convert_parser.add_argument(
-        '--progress-bar', '-p',
-        action='store_true',
-        help='Show a visual progress bar (requires tqdm: pip install tqdm)'
+        "--flat",
+        action="store_true",
+        help="Save all files in output directory without preserving structure",
     )
     convert_parser.add_argument(
-        '--jobs', '-j',
+        "--progress-bar",
+        "-p",
+        action="store_true",
+        help="Show a visual progress bar (requires tqdm: pip install tqdm)",
+    )
+    convert_parser.add_argument(
+        "--jobs",
+        "-j",
         type=int,
         default=1,
-        help='Number of parallel FFmpeg processes (default: 1)'
+        help="Number of parallel FFmpeg processes (default: 1)",
     )
-    
+    convert_parser.add_argument(
+        "--codec",
+        "-c",
+        default="aac",
+        choices=["aac", "aac_he", "alac"],
+        help="Audio codec to use (default: aac)",
+    )
+    convert_parser.add_argument(
+        "--bitrate",
+        default="64k",
+        help="Audio bitrate (e.g., 64k, 128k). Ignored for ALAC (default: 64k)",
+    )
+
     # Combine command
     combine_parser = subparsers.add_parser(
-        'combine',
-        help='Combine M4B files into a single file with chapters',
+        "combine",
+        help="Combine M4B files into a single file with chapters",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -244,41 +276,44 @@ Examples:
   
   # Use CSV file for advanced metadata control
   m4b-tools combine --csv book_files.csv
-        """
+        """,
     )
-    
+
     combine_parser.add_argument(
-        'pattern',
-        nargs='?',
-        help='Glob pattern to match M4B files (e.g., "*.m4b" or "parts/*.m4b")'
+        "pattern",
+        nargs="?",
+        help='Glob pattern to match M4B files (e.g., "*.m4b" or "parts/*.m4b")',
     )
+    combine_parser.add_argument("output", nargs="?", help="Output M4B file path")
     combine_parser.add_argument(
-        'output',
-        nargs='?',
-        help='Output M4B file path'
+        "--csv", help="CSV file with file paths, titles, and metadata"
     )
+    combine_parser.add_argument("--title", help="Title for the combined audiobook")
     combine_parser.add_argument(
-        '--csv',
-        help='CSV file with file paths, titles, and metadata'
-    )
-    combine_parser.add_argument(
-        '--title',
-        help='Title for the combined audiobook'
+        "--preserve-chapters",
+        action="store_true",
+        help="Preserve existing chapter structure within individual files",
     )
     combine_parser.add_argument(
-        '--preserve-chapters',
-        action='store_true',
-        help='Preserve existing chapter structure within individual files'
+        "--temp-dir", help="Use specified temporary directory (will not be removed)"
     )
     combine_parser.add_argument(
-        '--temp-dir',
-        help='Use specified temporary directory (will not be removed)'
+        "--codec",
+        "-c",
+        default="aac",
+        choices=["aac", "aac_he", "alac"],
+        help="Audio codec to use (default: aac). Can be overridden by CSV metadata",
     )
-    
+    combine_parser.add_argument(
+        "--bitrate",
+        default="64k",
+        help="Audio bitrate (e.g., 64k, 128k). Ignored for ALAC. Can be overridden by CSV metadata (default: 64k)",
+    )
+
     # Generate CSV command
     csv_parser = subparsers.add_parser(
-        'generate-csv',
-        help='Generate a CSV template from a folder containing M4B files',
+        "generate-csv",
+        help="Generate a CSV template from a folder containing M4B files",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -295,23 +330,23 @@ Examples:
   m4b-tools generate-csv "audiobooks/*"
   m4b-tools generate-csv "/path/to/books/series_*"
   m4b-tools generate-csv "**/*audiobook*"
-        """
+        """,
     )
-    
+
     csv_parser.add_argument(
-        'folder',
-        help='Folder containing M4B files or glob pattern for multiple folders (e.g., "audiobooks/*" or "**/*audiobook*")'
+        "folder",
+        help='Folder containing M4B files or glob pattern for multiple folders (e.g., "audiobooks/*" or "**/*audiobook*")',
     )
     csv_parser.add_argument(
-        'output',
-        nargs='?',
-        help='Output CSV file path (ignored when using glob patterns - each folder gets its own CSV file)'
+        "output",
+        nargs="?",
+        help="Output CSV file path (ignored when using glob patterns - each folder gets its own CSV file)",
     )
-    
+
     # Split command
     split_parser = subparsers.add_parser(
-        'split',
-        help='Split M4B files by chapters into various formats',
+        "split",
+        help="Split M4B files by chapters into various formats",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -326,39 +361,41 @@ Examples:
   
   # Split with parallel processing
   m4b-tools split "**/*.m4b" ./output -j 4
-        """
+        """,
     )
-    
+
     split_parser.add_argument(
-        'pattern',
-        help='Glob pattern to match M4B files (e.g., "*.m4b" or "audiobooks/**/*.m4b")'
-    )
-    split_parser.add_argument(
-        'output_dir',
-        help='Output directory for split chapter files'
+        "pattern",
+        help='Glob pattern to match M4B files (e.g., "*.m4b" or "audiobooks/**/*.m4b")',
     )
     split_parser.add_argument(
-        '--format', '-f',
-        choices=['mp3', 'm4a', 'm4b', 'aac', 'ogg', 'flac'],
-        default='mp3',
-        help='Output format for chapter files (default: mp3)'
+        "output_dir", help="Output directory for split chapter files"
     )
     split_parser.add_argument(
-        '--template', '-t',
-        default='{book_title}/{chapter_num:02d} - {chapter_title}.{ext}',
-        help='Naming template for output files. Available variables: {book_title}, {author}, {narrator}, {chapter_num}, {chapter_title}, {genre}, {year}, {original_filename}, {duration}, {duration_formatted}, {ext}'
+        "--format",
+        "-f",
+        choices=["mp3", "m4a", "m4b", "aac", "ogg", "flac"],
+        default="mp3",
+        help="Output format for chapter files (default: mp3)",
     )
     split_parser.add_argument(
-        '--jobs', '-j',
+        "--template",
+        "-t",
+        default="{book_title}/{chapter_num:02d} - {chapter_title}.{ext}",
+        help="Naming template for output files. Available variables: {book_title}, {author}, {narrator}, {chapter_num}, {chapter_title}, {genre}, {year}, {original_filename}, {duration}, {duration_formatted}, {ext}",
+    )
+    split_parser.add_argument(
+        "--jobs",
+        "-j",
         type=int,
         default=1,
-        help='Number of parallel chapter extraction processes (default: 1)'
+        help="Number of parallel chapter extraction processes (default: 1)",
     )
 
     # Metadata command (inlined)
     metadata_parser = subparsers.add_parser(
-        'metadata',
-        help='Dump M4B metadata in CSV format',
+        "metadata",
+        help="Dump M4B metadata in CSV format",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -367,21 +404,18 @@ Examples:
 
   # Write output to a file
   m4b-tools metadata audiobook.m4b --output meta.csv
-        """
+        """,
+    )
+    metadata_parser.add_argument("file", help="Path to the M4B file")
+    metadata_parser.add_argument(
+        "--format",
+        "-f",
+        choices=["csv"],
+        default="csv",
+        help="Output format: csv (default)",
     )
     metadata_parser.add_argument(
-        'file',
-        help='Path to the M4B file'
-    )
-    metadata_parser.add_argument(
-        '--format', '-f',
-        choices=['csv'],
-        default='csv',
-        help='Output format: csv (default)'
-    )
-    metadata_parser.add_argument(
-        '--output', '-o',
-        help='Output file path (writes to stdout if not provided)'
+        "--output", "-o", help="Output file path (writes to stdout if not provided)"
     )
     metadata_parser.set_defaults(func=cmd_metadata)
 
@@ -392,21 +426,21 @@ def main() -> int:
     """Main entry point for the CLI."""
     parser = create_parser()
     args = parser.parse_args()
-    
+
     if not args.command:
         parser.print_help()
         return 1
-    
+
     try:
-        if args.command == 'convert':
+        if args.command == "convert":
             return cmd_convert(args)
-        elif args.command == 'combine':
+        elif args.command == "combine":
             return cmd_combine(args)
-        elif args.command == 'generate-csv':
+        elif args.command == "generate-csv":
             return cmd_generate_csv(args)
-        elif args.command == 'split':
+        elif args.command == "split":
             return cmd_split(args)
-        elif args.command == 'metadata':
+        elif args.command == "metadata":
             return cmd_metadata(args)
         else:
             print(f"Unknown command: {args.command}", file=sys.stderr)
@@ -419,5 +453,5 @@ def main() -> int:
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

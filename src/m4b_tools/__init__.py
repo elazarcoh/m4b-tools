@@ -27,7 +27,7 @@ from .utils import check_ffmpeg, format_time
 
 __all__ = [
     "convert_to_m4b",
-    "convert_all_to_m4b", 
+    "convert_all_to_m4b",
     "combine_m4b_files",
     "split_m4b_file",
     "split_multiple_m4b_files",
